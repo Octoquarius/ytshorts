@@ -1,0 +1,23 @@
+# Sırlar
+.env
+credentials/
+**/client_secret*.json
+**/token.json
+
+# Üretilen içerik
+output/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

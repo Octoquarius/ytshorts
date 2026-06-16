@@ -1,0 +1,47 @@
+[
+  {
+    "id": "account1",
+    "name": "Kinetic Sand ASMR",
+    "theme": "kinetic sand cutting and crushing",
+    "credentials_dir": "credentials/account1",
+    "sheet_tab": "account1",
+    "publish_time": "10:00",
+    "privacy_status": "private"
+  },
+  {
+    "id": "account2",
+    "name": "Soap Cutting ASMR",
+    "theme": "soap slicing and shaving",
+    "credentials_dir": "credentials/account2",
+    "sheet_tab": "account2",
+    "publish_time": "12:00",
+    "privacy_status": "public"
+  },
+  {
+    "id": "account3",
+    "name": "Ice & Glass ASMR",
+    "theme": "ice and glass cracking",
+    "credentials_dir": "credentials/account3",
+    "sheet_tab": "account3",
+    "publish_time": "14:00",
+    "privacy_status": "public"
+  },
+  {
+    "id": "account4",
+    "name": "Slime Squish ASMR",
+    "theme": "slime squishing and poking",
+    "credentials_dir": "credentials/account4",
+    "sheet_tab": "account4",
+    "publish_time": "16:00",
+    "privacy_status": "public"
+  },
+  {
+    "id": "account5",
+    "name": "Paint Mixing ASMR",
+    "theme": "paint mixing and swirling",
+    "credentials_dir": "credentials/account5",
+    "sheet_tab": "account5",
+    "publish_time": "18:00",
+    "privacy_status": "public"
+  }
+]
