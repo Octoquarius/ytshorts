@@ -1,14 +1,15 @@
-"""Ana akış — tüm hesaplar üzerinde döngü.
+"""Main flow — loops over all accounts.
 
-Her gün 5 hesabın HER BİRİ için ayrı/benzersiz bir video üretir (her hesap kendi
-temasından farklı bir fikir üretir → aynı video tekrarlanmaz). Varsayılan modda
-video hazırlanır ve DURUR; yükleme için kullanıcı onayı beklenir.
+Produces a separate/unique video for EACH of the 5 accounts every day (each
+account generates a different idea from its own theme → the same video is
+never repeated). In default mode, a video is prepared and the flow STOPS;
+user approval is awaited before upload.
 
-Kullanım:
-  python -m src.pipeline                 # tüm hesaplar için video hazırla (onay bekler)
+Usage:
+  python -m src.pipeline                 # prepare a video for all accounts (awaits approval)
   python -m src.pipeline --account account1
-  python -m src.pipeline --upload account1 <manifest.json>   # onay sonrası yükle
-  python -m src.pipeline --auto-upload   # (dikkat) onaysız tam otomatik
+  python -m src.pipeline --upload account1 <manifest.json>   # upload after approval
+  python -m src.pipeline --auto-upload   # (caution) fully automatic without approval
 """
 from __future__ import annotations
 
@@ -24,13 +25,14 @@ from src import audio, compose, ideate, notify, prompts, sheets, video
 
 
 def prepare_account(account: config.Account) -> dict:
-    """Bir hesap için Aşama 1–3'ü çalıştırır; manifest (onay kartı) döndürür.
+    """Runs Stages 1–3 for one account; returns a manifest (approval card).
 
-    Yükleme YAPMAZ — manifest diske yazılır, onay adımı çağırana bırakılır.
+    Does NOT upload — the manifest is written to disk, and the approval step
+    is left to the caller.
     """
-    print(f"\n=== [{account.id}] {account.name} — tema: {account.theme} ===")
+    print(f"\n=== [{account.id}] {account.name} — theme: {account.theme} ===")
 
-    # Aşama 1 — Fikir (hesabın temasına göre, geçmişe karşı dedupe).
+    # Stage 1 — Idea (based on the account's theme, deduped against history).
     prior = sheets.used_ideas(account.sheet_tab)
     idea = ideate.generate_unique_idea(account.theme, prior)
     print(f"[idea] {idea}")
@@ -42,14 +44,14 @@ def prepare_account(account: config.Account) -> dict:
         plan["Environment"], plan["Sound"], production="In Progress",
     )
 
-    # Aşama 2 — 3 sahne promptu → video → ses.
+    # Stage 2 — 3 scene prompts → video → audio.
     scene_prompts = prompts.generate_scene_prompts(
         plan["Idea"], plan["Environment"], plan["Sound"]
     )
     clip_urls = video.generate_clips(scene_prompts)
     voiced_urls = audio.add_audio_to_clips(clip_urls, plan["Sound"])
 
-    # Aşama 3 — Birleştir + indir.
+    # Stage 3 — Combine + download.
     out_path = account.output_dir / f"{date.today().isoformat()}_{row_id}.mp4"
     final_path = compose.compose_and_download(voiced_urls, out_path)
 
@@ -71,17 +73,17 @@ def prepare_account(account: config.Account) -> dict:
     manifest_path = final_path.with_suffix(".manifest.json")
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    print(f"[ready] Video hazır: {final_path}")
+    print(f"[ready] Video ready: {final_path}")
     print(f"[ready] Manifest: {manifest_path}")
     return manifest
 
 
 def approve_and_upload(manifest: dict) -> str:
-    """Onay sonrası: YouTube yükleme + Sheets güncelleme + e-posta."""
+    """After approval: YouTube upload + Sheets update + email."""
     account = config.get_account(manifest["account_id"])
     video_path = Path(manifest["video_path"])
     if not video_path.exists():
-        raise RuntimeError(f"Video bulunamadı: {video_path}")
+        raise RuntimeError(f"Video not found: {video_path}")
 
     url = youtube_upload(account, video_path, manifest)
     sheets.update_status(
@@ -89,12 +91,12 @@ def approve_and_upload(manifest: dict) -> str:
         production="Done", youtube_url=url,
     )
     notify.notify_published(manifest["account_name"], manifest["title"], url)
-    print(f"[done] Yayında: {url}")
+    print(f"[done] Published: {url}")
     return url
 
 
 def youtube_upload(account: config.Account, video_path: Path, manifest: dict) -> str:
-    from src import youtube  # gecikmeli import: yükleme yapılmadıkça gerekmez
+    from src import youtube  # deferred import: not needed unless uploading
     return youtube.upload(
         account, video_path, manifest["title"], manifest["description"],
         manifest["caption"],
@@ -103,25 +105,25 @@ def youtube_upload(account: config.Account, video_path: Path, manifest: dict) ->
 
 def _confirm(prompt: str) -> bool:
     try:
-        return input(prompt).strip().lower() in ("e", "evet", "y", "yes")
+        return input(prompt).strip().lower() in ("y", "yes")
     except EOFError:
         return False
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="AI ASMR YouTube Shorts fabrikası")
-    parser.add_argument("--account", help="Sadece bu hesap için çalıştır")
+    parser = argparse.ArgumentParser(description="AI ASMR YouTube Shorts factory")
+    parser.add_argument("--account", help="Run for this account only")
     parser.add_argument(
         "--upload", nargs=2, metavar=("ACCOUNT", "MANIFEST"),
-        help="Onay sonrası manifest'ten yükleme yap",
+        help="Upload from a manifest after approval",
     )
     parser.add_argument(
         "--auto-upload", action="store_true",
-        help="Onaysız tam otomatik yükleme (dikkatli kullan)",
+        help="Fully automatic upload without approval (use with caution)",
     )
     args = parser.parse_args(argv)
 
-    # Yalnızca yükleme modu.
+    # Upload-only mode.
     if args.upload:
         _, manifest_path = args.upload
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -132,30 +134,30 @@ def main(argv: list[str] | None = None) -> int:
     if args.account:
         accounts = [a for a in accounts if a.id == args.account]
         if not accounts:
-            print(f"Hesap bulunamadı: {args.account}", file=sys.stderr)
+            print(f"Account not found: {args.account}", file=sys.stderr)
             return 1
 
     manifests = []
     for account in accounts:
         try:
             manifests.append(prepare_account(account))
-        except Exception as exc:  # bir hesabın hatası diğerlerini durdurmasın
-            print(f"[hata:{account.id}] {exc}", file=sys.stderr)
+        except Exception as exc:  # one account's error shouldn't stop the others
+            print(f"[error:{account.id}] {exc}", file=sys.stderr)
 
-    # Onay adımı.
-    print("\n================ ONAY ADIMI ================")
+    # Approval step.
+    print("\n================ APPROVAL STEP ================")
     for m in manifests:
-        print(f"\n• {m['account_name']}")
-        print(f"  Başlık: {m['title']}")
-        print(f"  Açıklama/Hashtag: {m['description']}")
+        print(f"\n- {m['account_name']}")
+        print(f"  Title: {m['title']}")
+        print(f"  Description/Hashtags: {m['description']}")
         print(f"  Video: {m['video_path']}")
 
         if args.auto_upload:
             approve_and_upload(m)
-        elif _confirm("  Bu videoyu YouTube'a yükleyeyim mi? (evet/hayır): "):
+        elif _confirm("  Upload this video to YouTube? (yes/no): "):
             approve_and_upload(m)
         else:
-            print("  Atlandı — durum 'Pending Approval' olarak kaldı.")
+            print("  Skipped — status remains 'Pending Approval'.")
 
     return 0
 

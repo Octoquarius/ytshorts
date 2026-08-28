@@ -1,8 +1,9 @@
-"""Aşama 3 — Final Kurgu (Fal AI · ffmpeg-api/compose) + indirme.
+"""Stage 3 — Final Edit (Fal AI · ffmpeg-api/compose) + download.
 
-3 × 10sn sesli klibi tek ~30sn videoda birleştirir, sonra lokale indirir.
+Combines 3 × 10s clips with audio into a single ~30s video, then downloads it
+locally.
 
-NOT: Fal ffmpeg-api/compose şeması değişebilir; sabitleri doğrula.
+NOTE: the Fal ffmpeg-api/compose schema may change; verify the constants.
 """
 from __future__ import annotations
 
@@ -18,12 +19,12 @@ import config
 MODEL_ID = "fal-ai/ffmpeg-api/compose"
 QUEUE_BASE = "https://queue.fal.run"
 
-# Sosyal medya için hedef ses yüksekliği (YouTube ~ -14 LUFS).
+# Target loudness for social media (YouTube ~ -14 LUFS).
 LOUDNORM_TARGET = "I=-14:TP=-1.5:LRA=11"
 
 
 def _ffmpeg_exe() -> str | None:
-    """Lokal ffmpeg ikilisini bulur (imageio-ffmpeg paketi veya PATH)."""
+    """Finds the local ffmpeg binary (imageio-ffmpeg package or PATH)."""
     try:
         import imageio_ffmpeg
         return imageio_ffmpeg.get_ffmpeg_exe()
@@ -34,16 +35,16 @@ def _ffmpeg_exe() -> str | None:
 def _headers() -> dict:
     key = config.FAL_API_KEY
     if not key:
-        raise RuntimeError("FAL_API_KEY eksik (.env).")
+        raise RuntimeError("FAL_API_KEY missing (.env).")
     return {"Authorization": f"Key {key}", "Content-Type": "application/json"}
 
 
 def _build_compose_payload(video_urls: list[str], clip_seconds: float = 10.0) -> dict:
-    """Ardışık klipleri uç uca ekleyen compose isteği oluşturur.
+    """Builds a compose request that appends consecutive clips end-to-end.
 
-    Fal ffmpeg compose, timestamp/duration değerlerini MİLİSANİYE bekler. Sesi
-    korumak için aynı kliplerden HEM video HEM audio track'i oluşturulur — yalnızca
-    'video' track'i görüntüyü alır, sesi düşürür.
+    Fal ffmpeg compose expects timestamp/duration values in MILLISECONDS. To
+    preserve audio, BOTH a video AND an audio track are built from the same
+    clips — only the 'video' track takes the picture and drops the sound.
     """
     keyframes = []
     cursor_ms = 0.0
@@ -51,7 +52,7 @@ def _build_compose_payload(video_urls: list[str], clip_seconds: float = 10.0) ->
     for url in video_urls:
         keyframes.append({"url": url, "timestamp": cursor_ms, "duration": duration_ms})
         cursor_ms += duration_ms
-    # Aynı keyframe listesi iki track için de kullanılır.
+    # The same keyframe list is used for both tracks.
     return {
         "tracks": [
             {"id": "video", "type": "video", "keyframes": list(keyframes)},
@@ -61,7 +62,7 @@ def _build_compose_payload(video_urls: list[str], clip_seconds: float = 10.0) ->
 
 
 def compose(video_urls: list[str], clip_seconds: float = 10.0) -> str:
-    """Klipleri birleştirir; final video URL'sini döndürür."""
+    """Combines the clips; returns the final video URL."""
     payload = _build_compose_payload(video_urls, clip_seconds)
     resp = requests.post(
         f"{QUEUE_BASE}/{MODEL_ID}", json=payload, headers=_headers(), timeout=60
@@ -70,10 +71,11 @@ def compose(video_urls: list[str], clip_seconds: float = 10.0) -> str:
     submit = resp.json()
     request_id = submit.get("request_id")
     if not request_id:
-        raise RuntimeError(f"compose request_id alınamadı: {resp.text[:300]}")
+        raise RuntimeError(f"Could not get compose request_id: {resp.text[:300]}")
 
-    # Alt-yollu modellerde (fal-ai/ffmpeg-api/compose) status/result URL'leri
-    # /compose içermez; en sağlamı submit cevabındaki URL'leri kullanmak.
+    # For sub-path models (fal-ai/ffmpeg-api/compose), the status/result URLs
+    # don't include /compose; the safest approach is to use the URLs from the
+    # submit response.
     status_url = submit.get("status_url")
     result_url = submit.get("response_url")
     deadline = time.monotonic() + config.POLL_TIMEOUT
@@ -90,17 +92,17 @@ def compose(video_urls: list[str], clip_seconds: float = 10.0) -> str:
             video = data.get("video_url") or (data.get("video") or {}).get("url")
             if video:
                 return video
-            raise RuntimeError(f"compose tamamlandı ama URL yok: {data}")
+            raise RuntimeError(f"compose completed but no URL: {data}")
         if status in ("ERROR", "FAILED"):
-            raise RuntimeError(f"compose başarısız: {s.text[:300]}")
+            raise RuntimeError(f"compose failed: {s.text[:300]}")
 
         time.sleep(config.POLL_INTERVAL)
 
-    raise TimeoutError(f"compose zaman aşımı (request_id={request_id}).")
+    raise TimeoutError(f"compose timed out (request_id={request_id}).")
 
 
 def download(url: str, dest: Path) -> Path:
-    """Final videoyu lokale indirir."""
+    """Downloads the final video locally."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(url, stream=True, timeout=120) as r:
         r.raise_for_status()
@@ -112,20 +114,21 @@ def download(url: str, dest: Path) -> Path:
 
 
 def normalize_audio(src: Path, dest: Path) -> Path:
-    """ASMR sesini duyulur seviyeye getirir (ffmpeg loudnorm).
+    """Brings the ASMR sound up to an audible level (ffmpeg loudnorm).
 
-    ffmpeg yoksa veya hata olursa kaynağı olduğu gibi dest'e kopyalar (sessizce
-    geçer — pipeline durmaz). Görüntü yeniden kodlanmaz (-c:v copy).
+    If ffmpeg is missing or fails, copies the source to dest as-is (fails
+    silently — the pipeline doesn't stop). The picture is not re-encoded
+    (-c:v copy).
     """
     ffmpeg = _ffmpeg_exe()
     if not ffmpeg:
-        print("[compose] ffmpeg yok — ses normalizasyonu atlanıyor.")
+        print("[compose] ffmpeg not found — skipping audio normalization.")
         if src != dest:
             shutil.copyfile(src, dest)
         return dest
 
-    # Çıktıyı en uyumlu formata zorla: 48kHz stereo AAC + faststart.
-    # (loudnorm tek başına 96kHz mono üretebiliyor; bazı oynatıcılar çalmıyor.)
+    # Force the output into the most compatible format: 48kHz stereo AAC + faststart.
+    # (loudnorm alone can produce 96kHz mono; some players won't play that.)
     cmd = [
         ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
         "-i", str(src),
@@ -137,9 +140,9 @@ def normalize_audio(src: Path, dest: Path) -> Path:
     ]
     try:
         subprocess.run(cmd, check=True)
-        print(f"[compose] Ses normalize edildi -> {dest}")
+        print(f"[compose] Audio normalized -> {dest}")
     except (subprocess.CalledProcessError, OSError) as exc:
-        print(f"[compose] Normalizasyon başarısız ({exc}); ham dosya kullanılıyor.")
+        print(f"[compose] Normalization failed ({exc}); using the raw file instead.")
         if src != dest:
             shutil.copyfile(src, dest)
     return dest
@@ -147,17 +150,17 @@ def normalize_audio(src: Path, dest: Path) -> Path:
 
 def compose_and_download(video_urls: list[str], dest: Path,
                          clip_seconds: float = 10.0, normalize: bool = True) -> Path:
-    """Birleştir + indir (+ ses normalize): lokal .mp4 yolunu döndürür."""
-    print("[compose] Klipler birleştiriliyor...")
+    """Combine + download (+ normalize audio): returns the local .mp4 path."""
+    print("[compose] Combining clips...")
     final_url = compose(video_urls, clip_seconds)
 
     if normalize:
         raw = dest.with_name(dest.stem + "_raw.mp4")
-        print(f"[compose] İndiriliyor -> {raw}")
+        print(f"[compose] Downloading -> {raw}")
         download(final_url, raw)
         normalize_audio(raw, dest)
         raw.unlink(missing_ok=True)
         return dest
 
-    print(f"[compose] İndiriliyor -> {dest}")
+    print(f"[compose] Downloading -> {dest}")
     return download(final_url, dest)

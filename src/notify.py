@@ -1,6 +1,6 @@
-"""Aşama 4 (Adım 12) — Gmail bildirimi (App Password ile SMTP).
+"""Stage 4 (Step 12) — Gmail notification (SMTP with App Password).
 
-Yeni video yayına alındığında YouTube linkini içeren bir e-posta gönderir.
+Sends an email containing the YouTube link when a new video is published.
 """
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ SMTP_PORT = 465
 
 
 def send(subject: str, body: str, to: str | None = None) -> None:
-    """Gmail App Password ile bilgilendirme e-postası gönderir."""
+    """Sends a notification email using a Gmail App Password."""
     sender = config.GMAIL_ADDRESS
     password = config.GMAIL_APP_PASSWORD
     recipient = to or config.NOTIFY_TO
     if not (sender and password and recipient):
-        print("[notify] Gmail ayarları eksik — bildirim atlanıyor.")
+        print("[notify] Gmail settings missing — skipping notification.")
         return
 
     msg = EmailMessage()
@@ -31,16 +31,16 @@ def send(subject: str, body: str, to: str | None = None) -> None:
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
         server.login(sender, password)
         server.send_message(msg)
-    print(f"[notify] E-posta gönderildi -> {recipient}")
+    print(f"[notify] Email sent -> {recipient}")
 
 
 def notify_published(account_name: str, title: str, youtube_url: str) -> None:
-    """'Yeni video yayında' bildirimi."""
+    """'New video published' notification."""
     send(
-        subject=f"[{account_name}] Yeni Short yayında",
+        subject=f"[{account_name}] New Short published",
         body=(
-            f"Kanal: {account_name}\n"
-            f"Başlık: {title}\n"
+            f"Channel: {account_name}\n"
+            f"Title: {title}\n"
             f"Link: {youtube_url}\n"
         ),
     )

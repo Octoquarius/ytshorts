@@ -1,8 +1,8 @@
-"""Aşama 2 (Adım 4) — 3 sahne promptu üretimi (Claude).
+"""Stage 2 (Step 4) — 3 scene prompt generation (Claude).
 
-Idea + Environment + Sound girdisinden, her biri 1000–2000 karakter, kameralı ve
-hareketli 3 ayrı sahne açıklaması üretir. Bu promptlar Wavespeed Seedance'e
-text-to-video girdisi olarak verilir.
+Generates 3 separate scene descriptions, each 1000–2000 characters, with
+camera work and motion, from the Idea + Environment + Sound input. These
+prompts are fed to Wavespeed Seedance as text-to-video input.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ _SCENES_SCHEMA = {
 
 
 def generate_scene_prompts(idea: str, environment: str, sound: str) -> list[str]:
-    """3 sahne promptu üretir (her biri 1000–2000 karakter, hareketli/kameralı)."""
+    """Generates 3 scene prompts (each 1000–2000 chars, with motion/camera work)."""
     prompt = (
         "You are a prompt engineer for a text-to-video model (ByteDance Seedance).\n"
         "Create EXACTLY 3 distinct scene prompts for a vertical (9:16) ASMR short.\n\n"
@@ -59,7 +59,7 @@ def generate_scene_prompts(idea: str, environment: str, sound: str) -> list[str]
     data = json.loads(text)
     scenes = data.get("scenes", [])
     if len(scenes) != 3:
-        raise RuntimeError(f"Beklenen 3 sahne, gelen {len(scenes)}.")
+        raise RuntimeError(f"Expected 3 scenes, got {len(scenes)}.")
     return scenes
 
 

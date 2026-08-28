@@ -1,9 +1,10 @@
-"""Aşama 4 (Adım 10) — YouTube'a yükleme (hesap bazlı OAuth).
+"""Stage 4 (Step 10) — Upload to YouTube (per-account OAuth).
 
-Her hesabın kendi `credentials/<account>/client_secret.json` + `token.json`
-çiftini kullanır. İlk çalıştırmada tarayıcıda her hesap için ayrı izin verilir.
+Each account uses its own `credentials/<account>/client_secret.json` +
+`token.json` pair. On first run, a separate browser permission prompt is
+shown for each account.
 
-⚠️ Yükleme yalnızca pipeline'daki onay adımından SONRA çağrılır.
+⚠️ Upload is only called AFTER the approval step in the pipeline.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 
 def _service(account: Account):
-    """Hesaba özel YouTube servisini OAuth ile döndürür."""
+    """Returns the account-specific YouTube service via OAuth."""
     creds = None
     token_path = account.token_path
     if token_path.exists():
@@ -32,7 +33,7 @@ def _service(account: Account):
         else:
             if not account.client_secret_path.exists():
                 raise RuntimeError(
-                    f"client_secret.json bulunamadı: {account.client_secret_path}"
+                    f"client_secret.json not found: {account.client_secret_path}"
                 )
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(account.client_secret_path), SCOPES
@@ -44,13 +45,13 @@ def _service(account: Account):
 
 
 def _parse_tags(caption: str) -> list[str]:
-    """Caption içindeki #hashtag'leri etiket listesine çevirir."""
+    """Converts #hashtags in the caption into a list of tags."""
     return [w.lstrip("#") for w in caption.split() if w.startswith("#")][:15]
 
 
 def upload(account: Account, video_path: Path, title: str, description: str,
            caption: str) -> str:
-    """Videoyu hesabın kanalına yükler; YouTube URL'sini döndürür."""
+    """Uploads the video to the account's channel; returns the YouTube URL."""
     svc = _service(account)
     body = {
         "snippet": {
@@ -71,7 +72,7 @@ def upload(account: Account, video_path: Path, title: str, description: str,
     while response is None:
         status, response = request.next_chunk()
         if status:
-            print(f"[youtube:{account.id}] Yükleniyor %{int(status.progress() * 100)}")
+            print(f"[youtube:{account.id}] Uploading {int(status.progress() * 100)}%")
 
     video_id = response["id"]
     return f"https://www.youtube.com/watch?v={video_id}"

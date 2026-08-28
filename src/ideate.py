@@ -1,13 +1,14 @@
-"""Aşama 1 — Fikir Üretimi (Claude).
+"""Stage 1 — Idea Generation (Claude).
 
-İki adım:
-1. `generate_idea(theme)`  → hesabın temasına göre tek satırlık, viral, < 10 kelime
-   bir ASMR konsepti üretir. Her hesabın farklı teması olduğu için çıktı benzersizdir.
-2. `expand_to_plan(idea)`  → fikri yapılandırılmış prodüksiyon JSON'una genişletir
-   (Caption, Idea, Environment, Sound, Status).
+Two steps:
+1. `generate_idea(theme)`  → generates a one-line, viral, < 10-word ASMR
+   concept based on the account's theme. Since each account has a different
+   theme, the output is unique.
+2. `expand_to_plan(idea)`  → expands the idea into a structured production
+   JSON (Caption, Idea, Environment, Sound, Status).
 
-Üretilen fikir, daha önce kullanılmış fikirlere (dedupe listesi) karşı kontrol
-edilerek tekrar engellenebilir — bkz. `generate_unique_idea`.
+The generated idea can be checked against previously used ideas (a dedupe
+list) to prevent repeats — see `generate_unique_idea`.
 """
 from __future__ import annotations
 
@@ -17,17 +18,17 @@ import anthropic
 
 import config
 
-# Tek istemci; ANTHROPIC_API_KEY ortamdan okunur.
+# Single client; ANTHROPIC_API_KEY is read from the environment.
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
-# Plan JSON şeması — yapılandırılmış çıktı garantisi için.
+# Plan JSON schema — guarantees structured output.
 _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
-        "Caption": {"type": "string"},   # 1 emoji + 12 hashtag
-        "Idea": {"type": "string"},      # (renk/stil) (nesne) being (aksiyon)
-        "Environment": {"type": "string"},  # < 20 kelime sahne tanımı
-        "Sound": {"type": "string"},     # < 15 kelime ses tanımı
+        "Caption": {"type": "string"},   # 1 emoji + 12 hashtags
+        "Idea": {"type": "string"},      # (color/style) (object) being (action)
+        "Environment": {"type": "string"},  # < 20-word scene description
+        "Sound": {"type": "string"},     # < 15-word sound description
         "Status": {"type": "string"},
     },
     "required": ["Caption", "Idea", "Environment", "Sound", "Status"],
@@ -36,7 +37,7 @@ _PLAN_SCHEMA = {
 
 
 def generate_idea(theme: str, avoid: list[str] | None = None) -> str:
-    """Hesabın temasına uygun, tek satırlık viral ASMR fikri üretir."""
+    """Generates a one-line viral ASMR idea matching the account's theme."""
     avoid = avoid or []
     avoid_block = ""
     if avoid:
@@ -64,7 +65,7 @@ def generate_idea(theme: str, avoid: list[str] | None = None) -> str:
 
 
 def expand_to_plan(idea: str, theme: str) -> dict:
-    """Tek satırlık fikri yapılandırılmış prodüksiyon planına genişletir."""
+    """Expands the one-line idea into a structured production plan."""
     prompt = (
         f"ASMR theme: {theme}\n"
         f"ASMR concept: {idea}\n\n"
@@ -93,19 +94,19 @@ def expand_to_plan(idea: str, theme: str) -> dict:
 
 
 def generate_unique_idea(theme: str, used_ideas: list[str], attempts: int = 3) -> str:
-    """Dedupe: kullanılmış fikirlerle çakışmayan bir fikir döndürür."""
+    """Dedupe: returns an idea that doesn't collide with used ideas."""
     used_lower = {u.strip().lower() for u in used_ideas}
     idea = ""
     for _ in range(attempts):
         idea = generate_idea(theme, avoid=used_ideas)
         if idea.strip().lower() not in used_lower:
             return idea
-    # Son denemede bile çakışıyorsa elimizdekini döndür (çağıran loglar).
+    # Still colliding after the last attempt — return what we have (caller logs it).
     return idea
 
 
 if __name__ == "__main__":
-    # Hızlı manuel test: python -m src.ideate
+    # Quick manual test: python -m src.ideate
     demo_theme = "kinetic sand cutting and crushing"
     one = generate_idea(demo_theme)
     print("IDEA:", one)

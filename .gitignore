@@ -1,10 +1,10 @@
-# Sırlar
+# Secrets
 .env
 credentials/
 **/client_secret*.json
 **/token.json
 
-# Üretilen içerik
+# Generated content
 output/
 logs/
 

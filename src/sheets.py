@@ -1,9 +1,10 @@
-"""Aşama 1/4 — Google Sheets okuma/yazma.
+"""Stage 1/4 — Google Sheets read/write.
 
-Her hesabın kendi sekmesi (`account.sheet_tab`) vardır. Sütun düzeni:
+Each account has its own tab (`account.sheet_tab`). Column layout:
 id | account | idea | caption | production | environment_prompt | sound_prompt | final_output | youtube_url
 
-Tek Google Cloud projesi + tek OAuth (Sheets API kota sorunu yaratmaz).
+A single Google Cloud project + single OAuth (the Sheets API doesn't cause
+quota issues).
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ HEADER = [
 
 
 def _service():
-    """Sheets API servisini OAuth ile döndürür (token'ı diskte saklar)."""
+    """Returns the Sheets API service via OAuth (stores the token on disk)."""
     creds = None
     token_path = config.SHEETS_TOKEN
     if token_path.exists():
@@ -41,7 +42,7 @@ def _service():
 
 
 def _ensure_tab(svc, tab: str) -> None:
-    """Sekme (tab) yoksa oluşturur — kullanıcı elle açmak zorunda kalmasın."""
+    """Creates the tab if it doesn't exist — so the user doesn't have to create it manually."""
     meta = svc.spreadsheets().get(
         spreadsheetId=config.GOOGLE_SHEET_ID, fields="sheets.properties.title"
     ).execute()
@@ -54,7 +55,7 @@ def _ensure_tab(svc, tab: str) -> None:
 
 
 def _ensure_header(svc, tab: str) -> None:
-    """Sekmeyi (yoksa oluşturup) ilk satırına başlık ekler."""
+    """Creates the tab if needed and adds a header to its first row."""
     _ensure_tab(svc, tab)
     rng = f"{tab}!A1:I1"
     resp = (
@@ -73,7 +74,7 @@ def _ensure_header(svc, tab: str) -> None:
 
 
 def used_ideas(tab: str) -> list[str]:
-    """Bu hesapta daha önce kullanılmış fikirleri döndürür (dedupe için)."""
+    """Returns ideas previously used for this account (for dedupe)."""
     svc = _service()
     _ensure_header(svc, tab)
     resp = (
@@ -87,7 +88,7 @@ def used_ideas(tab: str) -> list[str]:
 
 def append_row(tab: str, row_id: str, account: str, idea: str, caption: str,
                environment: str, sound: str, production: str = "In Progress") -> int:
-    """Yeni satır ekler; eklenen satırın numarasını döndürür."""
+    """Appends a new row; returns the number of the added row."""
     svc = _service()
     _ensure_header(svc, tab)
     values = [[row_id, account, idea, caption, production, environment, sound, "", ""]]
@@ -98,7 +99,7 @@ def append_row(tab: str, row_id: str, account: str, idea: str, caption: str,
         insertDataOption="INSERT_ROWS",
         body={"values": values},
     ).execute()
-    # 'Sheet1!A5:I5' → 5
+    # 'Sheet1!A5:I5' -> 5
     updated_range = result.get("updates", {}).get("updatedRange", "")
     try:
         return int(updated_range.split("!")[1].split(":")[0].lstrip("ABCDEFGHIJ"))
@@ -108,7 +109,7 @@ def append_row(tab: str, row_id: str, account: str, idea: str, caption: str,
 
 def update_status(tab: str, row_number: int, *, production: str | None = None,
                   final_output: str | None = None, youtube_url: str | None = None) -> None:
-    """Belirtilen satırda durum/çıktı/youtube alanlarını günceller."""
+    """Updates the status/output/youtube fields on the given row."""
     svc = _service()
     updates = []
     if production is not None:

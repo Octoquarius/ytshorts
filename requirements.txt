@@ -1,7 +1,7 @@
-anthropic                 # Claude API (fikir + sahne promptları)
+anthropic                 # Claude API (idea + scene prompts)
 requests                  # HTTP (Wavespeed, Fal)
-python-dotenv             # .env okuma
+python-dotenv             # reading .env
 google-api-python-client  # YouTube + Sheets API
-google-auth-oauthlib      # OAuth akışı (yerel tarayıcı izni)
+google-auth-oauthlib      # OAuth flow (local browser permission)
 google-auth-httplib2      # OAuth transport
-imageio-ffmpeg            # final videoda ses normalizasyonu (loudnorm)
+imageio-ffmpeg            # audio normalization on the final video (loudnorm)
